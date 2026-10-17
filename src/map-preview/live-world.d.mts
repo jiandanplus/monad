@@ -1,0 +1,9 @@
+export type LiveUnit={kind:number;hp:number};
+export type LiveNode={owner:number;units:LiveUnit[];supplied:boolean;fortified:boolean;version?:number;cooldownUntil?:number};
+export function copyLiveBoard(nodes:LiveNode[]):LiveNode[];
+export function displayNode(nodes:LiveNode[]|null,id:number,live?:boolean):LiveNode;
+export function unitOffset(index:number):{x:number;y:number};
+export function hitLiveUnit(nodes:LiveNode[]|null,x:number,y:number):{node:number;unit:number}|null;
+export function boxUnits(nodes:LiveNode[]|null,rect:{x1:number;y1:number;x2:number;y2:number},team:number):{source:number|null;units:number[];mixed:boolean;truncated:boolean};
+export function roadPoint(from:number,to:number,progress:number):{x:number;y:number}|null;
+export function liveTarget(nodes:LiveNode[]|null,from:number,to:number,team:number):boolean;

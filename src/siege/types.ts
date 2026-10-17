@@ -1,0 +1,10 @@
+import type {Address,Hex} from 'viem';
+export type Unit={kind:number,hp:number};
+export type NodeState={owner:number,version:number,cooldownUntil:number,fortified:boolean,supplied:boolean,units:Unit[]};
+export type Deployment={address:Address,blockNumber:bigint};
+export type Lobby={host:Address,rosterVersion:bigint,seatsPerFaction:number,players:Address[],teams:number[],readyFlags:boolean[]};
+export type Snapshot={roundId:bigint,startsAt:number,endsAt:number,blockTimestamp:number,rosterVersion:bigint,seatsPerFaction:number,players:Address[],teams:number[],nodes:NodeState[],funds:number[],scores:number[],incomeRates:number[],scoreRates:number[],blockNumber:bigint,loadedAt:number};
+export type ActionName='configureRoster'|'ready'|'startRound'|'recruit'|'dispatch'|'fortify'|'repair';
+export type Intent={address:Address,account:Address,functionName:ActionName,args:readonly any[],chainId:number,team?:number};
+export type Confirmed={hash:Hex,blockNumber:bigint,blockHash:Hex,event:Record<string,any>,eventName:string};
+export type World={lobby:Lobby,snapshot:Snapshot};

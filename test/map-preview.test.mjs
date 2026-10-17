@@ -1,3 +1,4 @@
+import {loadMapScene} from './helpers/load-map-scene.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FACTIONS, NODES, EDGES, ROUTES, WORLD_BOUNDS, project, unproject, worldToScreen, screenToWorld, zoomAt, clampCamera, minimapPoint, minimapToWorld, neighbors, legalTarget, routeLength, hitNode, isClickGesture, hitUnit, UNIT_OFFSETS, pointerSelection } from '../src/map-preview/world.mjs';
@@ -71,16 +72,6 @@ test('right clicking a visible unit targets its facility without toggling select
 });
 
 
-async function loadMapScene() {
- const { readFile } = await import('node:fs/promises');
- const { transpileModule, ModuleKind } = await import('typescript');
- const sceneUrl = new URL('../src/map-preview/scene.ts', import.meta.url);
- const source = await readFile(sceneUrl, 'utf8');
- const output = transpileModule(source, { compilerOptions: { target: 99, module: ModuleKind.ESNext } }).outputText
-   .replace("'./world.mjs'", JSON.stringify(new URL('../src/map-preview/world.mjs', import.meta.url).href));
- const { MapScene } = await import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`);
- return MapScene;
-}
 
 test('scene entry points reject invalid IDs and own a copy of selection', async () => {
  const MapScene = await loadMapScene();

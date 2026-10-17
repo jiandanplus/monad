@@ -1,12 +1,12 @@
 {
   "name": "blitzcanvas",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "npm run compile && tsc --noEmit && vite build",
-    "compile": "node scripts/compile.mjs",
+    "compile": "node scripts/compile.mjs && node scripts/compile-siege.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

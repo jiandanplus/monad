@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { NODES, FACTIONS, ROUTES, project, worldToScreen, screenToWorld, zoomAt, clampCamera, minimapPoint, minimapToWorld, hitNode, legalTarget, isClickGesture, hitUnit, pointerSelection, UNIT_OFFSETS, validNode } from './world.mjs';
+import {copyLiveBoard,displayNode,unitOffset,hitLiveUnit,boxUnits,roadPoint,liveTarget,type LiveNode} from './live-world.mjs';
 export type Camera = {
     x: number;
     y: number;
@@ -16,7 +17,11 @@ type Options = {
     onSelect: (id: number, unit?: number, asTarget?: boolean) => void;
     onCamera: (camera: Camera) => void;
     onAssets: (loaded: boolean) => void;
+    live?: boolean;
+    team?: () => number;
+    onBoxSelect?: (result: ReturnType<typeof boxUnits>) => void;
 };
+type ConfirmedReplay={hash:string;from:number;to:number;team:number;returned:boolean;count:number};
 const colorFor = (id: number) => FACTIONS.find(f => f.id === id)?.color || '#d5c996';
 const random = (x: number, y: number) => {
     const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
@@ -62,6 +67,7 @@ export class MapScene {
         startX: number;
         startY: number;
         moved: boolean;
+        selecting: boolean;
     } | null = null;
     private trees: {
         x: number;
@@ -70,6 +76,9 @@ export class MapScene {
     }[] = [];
     private dirty = true;
     private hover: number | null = null;
+    private liveBoard: LiveNode[] | null = null;
+    private replays: (ConfirmedReplay & {at:number})[] = [];
+    private replayKeys = new Set<string>();
     constructor(canvas: HTMLCanvasElement, mini: HTMLCanvasElement, options: Options) {
         this.canvas = canvas;
         this.mini = mini;
@@ -99,6 +108,7 @@ export class MapScene {
         this.on(this.canvas, 'pointerup', this.handlePointerUp as EventListener);
         this.on(this.canvas, 'pointercancel', ((e: PointerEvent) => this.endDrag(e.pointerId)) as EventListener);
         this.on(this.canvas, 'lostpointercapture', (() => {
+            if (this.drag?.selecting)this.dirty=true;
             this.drag = null;
             this.canvas.classList.remove('is-dragging');
         }) as EventListener);
@@ -119,7 +129,9 @@ export class MapScene {
         if (e.button !== 0 && e.button !== 2)
             return;
         const p = this.point(e);
-        this.drag = { id: e.pointerId, x: p.x, y: p.y, startX: p.x, startY: p.y, moved: false };
+        const w=screenToWorld(this.camera,p.x,p.y);
+        const selecting=!!this.options.live&&e.button===0&&(e.shiftKey||!!hitLiveUnit(this.liveBoard,w.x,w.y));
+        this.drag = { id: e.pointerId, x: p.x, y: p.y, startX: p.x, startY: p.y, moved: false, selecting };
         this.canvas.setPointerCapture(e.pointerId);
         this.canvas.classList.add('is-dragging');
     };
@@ -129,12 +141,13 @@ export class MapScene {
             const d = this.drag;
             if (Math.hypot(p.x - d.startX, p.y - d.startY) > 5)
                 d.moved = true;
-            if (d.moved) {
+            if (d.moved && !d.selecting) {
                 this.camera = clampCamera({ ...this.camera, x: this.camera.x - (p.x - d.x) / this.camera.zoom, y: this.camera.y - (p.y - d.y) / this.camera.zoom });
                 this.changed();
             }
             d.x = p.x;
             d.y = p.y;
+            if(d.selecting)this.dirty=true;
         }
         else {
             const w = screenToWorld(this.camera, p.x, p.y), h = hitNode(w.x, w.y);
@@ -151,10 +164,15 @@ export class MapScene {
             return;
         const p = this.point(e);
         this.endDrag(e.pointerId);
+        if(d.selecting&&d.moved){
+            const a=screenToWorld(this.camera,d.startX,d.startY),b=screenToWorld(this.camera,p.x,p.y);
+            this.options.onBoxSelect?.(boxUnits(this.liveBoard,{x1:a.x,y1:a.y,x2:b.x,y2:b.y},this.options.team?.()??0));
+            this.dirty=true;return;
+        }
         if (d.moved || !isClickGesture({ x: d.startX, y: d.startY }, p))
             return;
         const w = screenToWorld(this.camera, p.x, p.y);
-        const picked = hitUnit(w.x, w.y);
+        const picked = this.options.live ? hitLiveUnit(this.liveBoard,w.x,w.y) : hitUnit(w.x, w.y);
         const id = picked?.node ?? hitNode(w.x, w.y);
         if (id !== null) {
             const intent = pointerSelection(id, picked?.unit, e.button);
@@ -183,6 +201,7 @@ export class MapScene {
     private endDrag(id: number) {
         if (this.drag?.id !== id)
             return;
+        if (this.drag.selecting)this.dirty=true;
         this.drag = null;
         this.canvas.classList.remove('is-dragging');
         if (this.canvas.hasPointerCapture(id))
@@ -229,6 +248,25 @@ export class MapScene {
         if (this.drag)
             this.endDrag(this.drag.id);
     }
+    setState(nodes:LiveNode[]|null){
+        this.liveBoard=nodes===null?null:copyLiveBoard(nodes);
+        if(nodes===null)this.replays=[];
+        this.dirty=true;
+    }
+    private nodeState(id:number){return displayNode(this.liveBoard??null,id,!!this.options.live);}
+    private offset(i:number){return this.options.live?unitOffset(i):unitOffsets[i];}
+    playConfirmedOrder(order:ConfirmedReplay){
+        const now=performance.now();
+        const active=this.replays.filter(r=>now-r.at<(r.returned?3600:2200));
+        if(active.length!==this.replays.length)this.dirty=true;
+        this.replays=active;
+        if(!this.options.live||!this.liveBoard||!order.hash||this.replayKeys.has(order.hash)||active.some(r=>r.hash===order.hash)||!roadPoint(order.from,order.to,0))return;
+        if(!Number.isInteger(order.count)||order.count<1||order.count>6||order.team<1||order.team>4)return;
+        this.replayKeys.add(order.hash);
+        if(this.replayKeys.size>100)this.replayKeys.delete(this.replayKeys.values().next().value!);
+        if(this.replays.length>=100)this.replays.shift();
+        this.replays.push({...order,at:now});this.dirty=true;
+    }
     resume() {
         if (this.disposed || !this.paused)
             return;
@@ -250,6 +288,7 @@ export class MapScene {
         if (this.drag)
             this.endDrag(this.drag.id);
         this.abort.abort();
+        this.replays=[];this.replayKeys.clear();
         this.image.onload = null;
         this.image.onerror = null;
     }
@@ -283,6 +322,7 @@ export class MapScene {
             return;
         const dt = Math.min((now - this.last) / 1000, .05);
         this.last = now;
+        if(this.replays.length){this.replays=this.replays.filter(r=>now-r.at<(r.returned?3600:2200));this.dirty=true;}
         let dx = 0, dy = 0;
         for (const k of this.keys) {
             if (k === 'a' || k === 'arrowleft')
@@ -452,7 +492,9 @@ export class MapScene {
         this.diamond(c, x, y - h, w, d, roof);
     }
     private building(n: typeof NODES[number]) {
-        const c = this.ctx, p = project(n.x, n.y), color = colorFor(n.faction), chosen = this.selection.source === n.id, target = this.selection.target === n.id;
+        const state=this.nodeState(n.id);
+        const c = this.ctx, p = project(n.x, n.y), color = colorFor(state.owner), chosen = this.selection.source === n.id, target = this.selection.target === n.id;
+        if(state.fortified){this.diamond(c,p.x,p.y+9,203,103,'#d1b57344');c.strokeStyle='#e9c879';c.lineWidth=3;c.stroke();}
         if (chosen || target || this.hover === n.id) {
             c.strokeStyle = target ? '#edcd76' : color;
             c.lineWidth = 3;
@@ -536,6 +578,9 @@ export class MapScene {
         c.fill();
         c.fillStyle = '#283326';
         c.fillRect(p.x - 55, p.y - 36, 4, 6);
+        if(this.options.live&&state.owner>0&&!state.supplied&&n.type!=='base'){
+            c.fillStyle='#382e25';c.fillRect(p.x-52,p.y-5,40,19);c.fillStyle='#ffc38c';c.font='bold 11px sans-serif';c.textAlign='center';c.fillText('断补给',p.x-32,p.y+8);
+        }
     }
     private tree(x: number, y: number, size: number) {
         const c = this.ctx;
@@ -561,7 +606,8 @@ export class MapScene {
         c.restore();
     }
     private troop(id: number, i: number) {
-        const c = this.ctx, n = NODES[id], p = project(n.x, n.y), o = unitOffsets[i], kind = demoUnits(id)[i], color = colorFor(n.faction), selected = this.selection.source === id && this.selection.units.includes(i);
+        const state=this.nodeState(id),u=state.units[i];if(!u)return;
+        const c = this.ctx, n = NODES[id], p = project(n.x, n.y), o = this.offset(i), kind = ['步兵','坦克','工程师'][u.kind], color = colorFor(state.owner), selected = this.selection.source === id && this.selection.units.includes(i);
         c.save();
         c.translate(p.x + o.x, p.y + o.y);
         this.diamond(c, 0, 1, kind === '坦克' ? 34 : 19, kind === '坦克' ? 17 : 10, selected ? '#d7ed9a' : '#24362499');
@@ -587,6 +633,7 @@ export class MapScene {
                 c.fillRect(5, -19, 5, 19);
             }
         }
+        if(this.options.live){const width=u.kind===1?34:23;c.fillStyle='#16261b';c.fillRect(-width/2,-44,width,4);c.fillStyle=u.hp/[10,30,8][u.kind]<.4?'#e7906f':color;c.fillRect(-width/2,-44,width*u.hp/[10,30,8][u.kind],4);}
         c.restore();
     }
     private draw() {
@@ -599,6 +646,11 @@ export class MapScene {
         c.scale(zoom, zoom);
         c.imageSmoothingEnabled = false;
         c.drawImage(this.terrain, -3072, -608);
+        if(this.options.live&&this.liveBoard){
+            for(const r of ROUTES){const a=this.nodeState(r.from),b=this.nodeState(r.to);if(!a.owner||a.owner!==b.owner)continue;
+                c.strokeStyle=a.supplied&&b.supplied?colorFor(a.owner)+'bb':'#e9ae7488';c.lineWidth=4;c.setLineDash(a.supplied&&b.supplied?[]:[9,8]);c.beginPath();r.points.forEach((p,i)=>{const q=project(p.x,p.y);if(i)c.lineTo(q.x,q.y);else c.moveTo(q.x,q.y);});c.stroke();c.setLineDash([]);
+            }
+        }
         const objects: ({
             depth: number;
             draw: () => void;
@@ -621,17 +673,17 @@ export class MapScene {
                 for (const [ox, oy] of [[-98, 20], [105, -11]])
                     objects.push({ depth: p.y + oy, draw: () => {
                             this.box(p.x + ox, p.y + oy, 41, 27, 19, '#8d9678', '#626e51');
-                            c.fillStyle = colorFor(n.faction);
+                            c.fillStyle = colorFor(this.nodeState(n.id).owner);
                             c.fillRect(p.x + ox - 10, p.y + oy - 18, 20, 3);
                         } });
             }
             objects.push({ depth: p.y, draw: () => this.building(n) });
-            demoUnits(n.id).forEach((_, i) => objects.push({ depth: p.y + unitOffsets[i].y, draw: () => this.troop(n.id, i) }));
+            this.nodeState(n.id).units.forEach((_, i) => objects.push({ depth: p.y + this.offset(i).y, draw: () => this.troop(n.id, i) }));
         }
         objects.sort((a, b) => a.depth - b.depth).forEach(o => o.draw());
         if (this.selection.source !== null && this.selection.target !== null) {
             const a = this.selection.source, b = this.selection.target, r = ROUTES.find(r => (r.from === a && r.to === b) || (r.to === a && r.from === b));
-            if (r && legalTarget(a, b)) {
+            if (r && (this.options.live?liveTarget(this.liveBoard,a,b,this.options.team?.()??0):legalTarget(a, b))) {
                 c.strokeStyle = '#ffe39b';
                 c.lineWidth = 7;
                 c.setLineDash([12, 9]);
@@ -647,6 +699,9 @@ export class MapScene {
                 c.setLineDash([]);
             }
         }
+        for(const r of this.replays){const elapsed=performance.now()-r.at;const returning=r.returned&&elapsed>1900;const t=Math.min(1,(returning?elapsed-1900:elapsed)/(returning?1500:1900));const p=roadPoint(returning?r.to:r.from,returning?r.from:r.to,t);if(!p)continue;
+            this.diamond(c,p.x,p.y,29,16,colorFor(r.team));c.fillStyle='#15221b';c.textAlign='center';c.font='bold 10px sans-serif';c.fillText(String(r.count),p.x,p.y+4);c.fillStyle='#f4edd2';c.fillText(returning?'确认回放·返回':'确认回放',p.x,p.y-13);
+        }
         c.restore();
         // Labels remain readable at every zoom level.
         for (const n of NODES) {
@@ -659,12 +714,13 @@ export class MapScene {
             const w = c.measureText(label).width + 18;
             c.fillStyle = selected ? '#24311ff0' : '#1b271edb';
             c.fillRect(s.x - w / 2, ty - 11, w, 21);
-            c.fillStyle = colorFor(n.faction);
+            c.fillStyle = colorFor(this.nodeState(n.id).owner);
             c.fillRect(s.x - w / 2, ty - 11, 2, 21);
             c.fillStyle = selected ? '#f1edcf' : '#d6d9bb';
             c.textAlign = 'center';
             c.fillText(label, s.x, ty + 3);
         }
+        if(this.drag?.selecting&&this.drag.moved){const d=this.drag;c.strokeStyle='#e5e9a2';c.fillStyle='#d9e69322';c.lineWidth=1;c.fillRect(d.startX,d.startY,d.x-d.startX,d.y-d.startY);c.strokeRect(d.startX,d.startY,d.x-d.startX,d.y-d.startY);}
     }
     private drawMini() {
         const c = this.minictx, r = this.mini.getBoundingClientRect(), w = r.width, h = r.height, dpr = this.mini.width / w;
@@ -693,7 +749,7 @@ export class MapScene {
         }
         for (const n of NODES) {
             const p = project(n.x, n.y), m = minimapPoint(p.x, p.y, w, h);
-            c.fillStyle = colorFor(n.faction);
+            c.fillStyle = colorFor(this.nodeState(n.id).owner);
             c.fillRect(m.x - 2.5, m.y - 2.5, 5, 5);
         }
         const a = screenToWorld(this.camera, 0, 0), b = screenToWorld(this.camera, this.camera.width, this.camera.height), ma = minimapPoint(a.x, a.y, w, h), mb = minimapPoint(b.x, b.y, w, h);
