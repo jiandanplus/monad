@@ -1,0 +1,124 @@
+{
+  "checkedAt": "2026-10-17T10:04:53.785Z",
+  "chainId": 10143,
+  "address": "0xfF0c32C5e82FB2b4B4ec049779873E83d43a4d5C",
+  "runtimeMatches": true,
+  "blockNumber": "71792741",
+  "snapshot": [
+    "1",
+    "1792227394",
+    "1792227574",
+    [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2
+    ],
+    [
+      60,
+      2,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      60
+    ],
+    [
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      "180",
+      "180"
+    ],
+    100,
+    0,
+    0,
+    "0",
+    "1792231493"
+  ],
+  "proofs": [
+    {
+      "hash": "0x5fc3d1008456bbc136c4334a3c7a734ef63f2c3cdc386ceaa14e8d4c85c770df",
+      "status": "success",
+      "blockNumber": "71779168",
+      "account": "0x94bbaaa751d2c51d077a13396d802bbbd72530ff",
+      "functionName": "startRound",
+      "args": [
+        "0"
+      ],
+      "gasUsed": "610942",
+      "gasCostMON": "0.06287204122",
+      "events": [
+        {
+          "eventName": "RoundStarted",
+          "args": {
+            "roundId": "1",
+            "starter": "0x94BbaaA751D2C51D077A13396d802bBBD72530ff",
+            "startsAt": "1792227394",
+            "endsAt": "1792227574"
+          }
+        }
+      ]
+    },
+    {
+      "hash": "0xd348233a5a89b08814ebffe1f5c1cff1375b72dcb8eceee5becb475b1ecd1b65",
+      "status": "success",
+      "blockNumber": "71779241",
+      "account": "0x94bbaaa751d2c51d077a13396d802bbbd72530ff",
+      "functionName": "cast",
+      "args": [
+        "1",
+        1,
+        1,
+        0
+      ],
+      "gasUsed": "202720",
+      "gasCostMON": "0.0206652768",
+      "events": [
+        {
+          "eventName": "SquadDeployed",
+          "args": {
+            "roundId": "1",
+            "district": 1,
+            "actor": "0x94BbaaA751D2C51D077A13396d802bBBD72530ff",
+            "team": 1,
+            "unit": 0,
+            "beforeOwner": 0,
+            "afterOwner": 0,
+            "beforeDefense": 20,
+            "afterDefense": 2,
+            "spent": 20,
+            "pointsAfter": 80
+          }
+        }
+      ]
+    }
+  ],
+  "twoFactionAcceptancePassed": false
+}

@@ -1,0 +1,19 @@
+# Every deployment is a real transaction
+
+User explicitly requires every troop dispatch to be a real transaction, fully tied to Monad. This refines the approved Pixel RTS and keeps all gameplay numbers and ABI. Public UI must never enter practice, instantiate simulated opponents, or fall back to local state when config/RPC fails. Development model remains test-only.
+
+## Contract storage
+Keep 180sec/9nodes/2teams and exact approved costs,power,cooldowns,adjacency,income,score,end behavior. Separate owner/since/accrual storage slots from defense/actions/entrants so different-address noncapture attacks at different districts have no application storage read/write conflicts. Ownership captures retain legitimate dependencies. Real EVM traces must prove the noncapture case; do not claim universal parallelism or measured chain TPS. ABI unchanged; compiled runtime changes and requires a fresh Testnet deployment, never relabel old runtime.
+
+## Production transaction flow
+Each human dispatch invokes cast(expectedRoundId,district,team,unit) exactly once and is separately signed and broadcast. StartRound is an explicit separate transaction. Show signing/pending/confirmed/reverted/not_sent/unknown statuses, action details, submitted and final hashes, account, contract, round, receipt block and observed timing. Pending has no battle effect. Territory, defense and confirmed battle effects only come from chain snapshots/events. Resource/score time projections remain clearly labeled estimates.
+
+Store at most50 local transaction records with schema validation; local records are only navigation hints. On reload unfinished records become unknown and are reconciled with read-only receipt lookups, never rebroadcast. Account and contract scope must be explicit. Repricing keeps one order with hash history; reverted/cancelled/replaced/timeout must not look successful. Confirmed label requires a successful receipt; unknown receipts remain unknown.
+
+## Verification and shipping
+Meaningful TDD for storage conflicts, ledger transitions/reload/untrusted storage and actual UI dispatch errors/pending/success. Preserve wallet/round/fresh snapshot guards. Full suite/build and independent review. Local strict-chain browser QA with actual contract; public Sites sameproject audience remains public, sourceZIP refreshed. Existing public-domain MetaMask malicious warning remains unresolved: do not disable protection or auto-acknowledge it. For wallet testing use locally built own source and verified chain data; any wallet final confirmation belongs to human. Two independently controlled addresses/factions must have real successful dispatch receipts and an independent reader sees both. Report chain timing as observed data only. GitHub upload remains cancelled by user; Mojo unsubmitted until required fields resolved.
+
+## Live-account selection refinement
+Live QA showed ordinary reconnect retained the origin-authorized first address after the human selected another account globally. Add explicit account-selection permission prompt via EIP-2255 wallet_requestPermissions with only eth_accounts, then existing account/network checks. This authorizes public account access only, never a transaction; no silent fallback to old signer on reject/unsupported method. Button is locked while connecting or sending. Current MetaMask docs confirmed through Context7 (official metamask-docs JSON-RPC reference). This is a necessary refinement of the approved two-address real-transaction flow.
+
+Account-list refinement: never assume the first eth_requestAccounts result is the user's intended signer. Display only actual provider-returned authorized addresses, allow explicit selection, and before every write recheck selected address is still authorized. Bind selection to provider and clear on provider/account/network changes. Removed authorization fails rather than substituting first address.

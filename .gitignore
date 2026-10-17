@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.openai/
+.env*
+!.env.example
+*.log
+.DS_Store
+public/source.zip
+evidence*.json

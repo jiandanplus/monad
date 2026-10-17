@@ -1,0 +1,23 @@
+{
+  "name": "blitzcanvas",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "npm run compile && tsc --noEmit && vite build",
+    "compile": "node scripts/compile.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.38.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0",
+    "typescript": "^5.9.0",
+    "@types/qrcode": "^1.5.5",
+    "solc": "0.8.30",
+    "ganache": "^7.9.2"
+  }
+}
